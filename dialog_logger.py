@@ -13,7 +13,7 @@ class DialogLogger:
         self.current_file = None
 
     def _cleanup_old_files(self):
-        files = sorted(self.dialog_dir.glob("dialog_*.jsonl"), key=lambda f: f.stat().st_mtime)
+        files = sorted(self.dialog_dir.glob("dialog_*.json"), key=lambda f: f.stat().st_mtime)
 
         while len(files) > self.max_files:
             files[0].unlink()
@@ -46,6 +46,7 @@ class DialogLogger:
             }
             with self.current_file.open("a", encoding="utf-8") as f:
                 f.write(json.dumps(header, ensure_ascii=False) + "\n")
+                f.flush()
 
         log_entry = {
             "timestamp": datetime.now().isoformat(),
@@ -54,3 +55,4 @@ class DialogLogger:
 
         with self.current_file.open("a", encoding="utf-8") as f:
             f.write(json.dumps(log_entry, ensure_ascii=False) + "\n")
+            f.flush()

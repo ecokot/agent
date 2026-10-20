@@ -17,7 +17,7 @@ client = OpenAI(
 model = "qwen3.5:4b"
 
 instructions = """
-Ты — ИИ-агент. Отвечай на русском языке.
+Ты — ИИ-агент.
 Отвечай коротко, по-русски, без markdown и emoji.
 Если не знаешь ответа — используй ТОЛЬКО доступные инструменты.
 Если нет подходящего инструмента — скажи, нет подходящего инструмента.
@@ -28,9 +28,8 @@ instructions = """
 tools, functions = get_tools([
     "read_file",
     "write_file",
-    "add_note",
-    "list_notes",
-    "count_rows"
+    "count_rows",
+    "list_directory"
 ])
 
 assistant = Assistant(
@@ -40,5 +39,5 @@ assistant = Assistant(
     tools=tools,
     functions=functions,
 )
-print(assistant("Посмотри заметки и добавь новую со следующим порядковым номером"))
+print(assistant("Посмотри за проект в рабочей директории в папке obuchenie"))
 

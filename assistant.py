@@ -37,7 +37,7 @@ class Assistant:
             if self.tools:
                 params["tools"] = self.tools
                 params["tool_choice"] = "auto"
-
+                logger.debug(f"Подключены инструменты: {self.tools}")
             res = self.client.chat.completions.create(**params)
             msg = res.choices[0].message
 
