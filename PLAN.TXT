@@ -1,0 +1,22 @@
+search_in_file — поиск текста/regex внутри файла
+append_file — дописывание в конец файла (append mode)
+delete_file — удаление файла
+copy_file / move_file — копирование и перемещение
+get_file_info — размер, дата создания, тип файла
+find_files — поиск файлов по маске/паттерну в директории
+Выполнение команд:
+
+run_command — выполнение shell-команд (с ограничениями)
+Данные:
+
+read_csv / read_json — парсинг структурированных данных
+execute_sql — запрос к SQLite БД
+Системные:
+
+get_env — чтение переменных окружения
+get_system_info — ОС, Python версия, свободное место
+Для агента:
+
+web_search — поиск в интернете
+fetch_url — скачивание содержимого URL
+send_email — отправка email
