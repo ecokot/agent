@@ -48,5 +48,5 @@ assistant = Assistant(
     tools=tools,
     functions=functions,
 )
-print(assistant("Выведи текст из файла заяц.txt в консоль"))
+print(assistant("Прочитай PLAN.TXT и предложи план для следующего шага"))
 
