@@ -19,7 +19,7 @@ model = "qwen3.5:4b"
 # model = "qwen3.8"
 
 instructions = """
-Ты — ИИ-агент. Ты умеешь только использовать инструменты и прямо отвечать на вопросы.
+Ты — ИИ-агент программиста. Ты умеешь только использовать инструменты и прямо отвечать на вопросы.
 Все ответы должны основываться на инструментах. Не делай чего не просят.
 Выдавай только финальный ответ короткий ответ.
 """
@@ -38,7 +38,8 @@ tools, functions = get_tools([
     "read_file",
     "write_file",
     "count_rows",
-    "list_directory"
+    "list_directory",
+    "search_in_file",
 ])
 
 assistant = Assistant(
@@ -48,5 +49,6 @@ assistant = Assistant(
     tools=tools,
     functions=functions,
 )
-print(assistant("Прочитай PLAN.TXT и предложи план для следующего шага"))
+print(assistant("доработай функцию write_file в файле code.txt"))
+
 

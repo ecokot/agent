@@ -1,8 +1,15 @@
 # tools/file_tools.py
 import os
+import re
 from pathlib import Path
 from tools.registry import register_tool
-from config import BASE_DIR, MAX_LIST_DEPTH, MAX_LIST_FILES
+from config import (
+    BASE_DIR,
+    MAX_LIST_DEPTH,
+    MAX_LIST_FILES,
+    MAX_SEARCH_RESULTS,
+    MAX_SEARCH_LINE_LENGTH
+)
 
 
 def _resolve_path(path: str) -> Path:
@@ -40,7 +47,21 @@ def read_file(path: str):
         return f.read()
 
 
-def write_file(path: str, content: str):
+def write_file(path: str, content: str, mode: str = "overwrite",
+               pattern: str = None, replacement: str = None,
+               line_number: int = None, case_sensitive: bool = True):
+    """
+    Запись в файл с разными режимами.
+
+    Args:
+        path: Относительный путь к файлу
+        content: Контент для записи
+        mode: Режим записи (overwrite, append, prepend, replace, insert)
+        pattern: Шаблон для поиска (для режима replace)
+        replacement: Текст для замены (для режима replace, по умолчанию content)
+        line_number: Номер строки для вставки (для режима insert)
+        case_sensitive: Чувствительность к регистру (для режима replace)
+    """
     try:
         validated_path = _resolve_path(path)
     except ValueError as e:
@@ -48,10 +69,63 @@ def write_file(path: str, content: str):
 
     validated_path.parent.mkdir(parents=True, exist_ok=True)
 
-    with open(validated_path, "w", encoding="utf-8") as f:
-        f.write(content)
+    try:
+        # Читаем существующий контент если файл существует
+        existing_content = ""
+        if validated_path.exists():
+            with open(validated_path, "r", encoding="utf-8") as f:
+                existing_content = f.read()
 
-    return f"File written: {path}"
+        if mode == "overwrite":
+            new_content = content
+
+        elif mode == "append":
+            new_content = existing_content + content
+
+        elif mode == "prepend":
+            new_content = content + existing_content
+
+        elif mode == "insert":
+            if line_number is None:
+                return "line_number required for insert mode"
+
+            lines = existing_content.splitlines(keepends=True)
+
+            if line_number < 0 or line_number > len(lines):
+                return f"Invalid line_number: {line_number}. File has {len(lines)} lines"
+
+            lines.insert(line_number, content + "\n")
+            new_content = "".join(lines)
+
+        elif mode == "replace":
+            if pattern is None:
+                return "pattern required for replace mode"
+
+            if replacement is None:
+                replacement = content
+
+            flags = 0 if case_sensitive else re.IGNORECASE
+
+            try:
+                compiled = re.compile(pattern, flags)
+            except re.error as e:
+                return f"Invalid regex pattern: {e}"
+
+            if not compiled.search(existing_content):
+                return f"No matches found for pattern '{pattern}'"
+
+            new_content = compiled.sub(replacement, existing_content)
+
+        else:
+            return f"Unknown mode: {mode}. Use: overwrite, append, prepend, replace, insert"
+
+        with open(validated_path, "w", encoding="utf-8") as f:
+            f.write(new_content)
+
+        return f"File written: {path} (mode: {mode})"
+
+    except Exception as e:
+        return f"Error: {e}"
 
 
 def count_rows(path: str):
@@ -126,6 +200,76 @@ def list_directory(path: str = ".", recursive: bool = False,
         return f"Permission denied: {path}"
     except Exception as e:
         return f"Error: {e}"
+
+def search_in_file(path: str, pattern: str, mode: str = "regex",
+                   max_results: int = MAX_SEARCH_RESULTS,
+                   case_sensitive: bool = True):
+    """
+    Поиск в файле с разными режимами.
+
+    Args:
+        path: Относительный путь к файлу
+        pattern: Шаблон поиска
+        mode: Режим поиска (regex, contains, exact, word)
+        max_results: Максимум результатов
+        case_sensitive: Чувствительность к регистру
+    """
+    try:
+        validated_path = _resolve_path(path)
+    except ValueError as e:
+        return str(e)
+
+    if not validated_path.exists():
+        return f"File not found: {path}"
+
+    if validated_path.stat().st_size > 10 * 1024 * 1024:
+        return f"File too large (max 10MB)"
+
+    try:
+        with open(validated_path, "r", encoding="utf-8", errors="replace") as f:
+            lines = f.readlines()
+    except Exception as e:
+        return f"Error reading file: {e}"
+
+    flags = 0 if case_sensitive else re.IGNORECASE
+
+    try:
+        if mode == "regex":
+            compiled = re.compile(pattern, flags)
+        elif mode == "contains":
+            escaped = re.escape(pattern)
+            compiled = re.compile(escaped, flags)
+        elif mode == "exact":
+            escaped = re.escape(pattern)
+            compiled = re.compile(f"^{escaped}$", flags)
+        elif mode == "word":
+            escaped = re.escape(pattern)
+            compiled = re.compile(rf"\b{escaped}\b", flags)
+        else:
+            return f"Unknown mode: {mode}. Use: regex, contains, exact, word"
+    except re.error as e:
+        return f"Invalid regex pattern: {e}"
+
+    results = []
+    for line_num, line in enumerate(lines, 1):
+        if len(results) >= max_results:
+            results.append(f"... (limit {max_results} results)")
+            break
+
+        matches = list(compiled.finditer(line))
+        if matches:
+            display_line = line.rstrip('\n')
+            if len(display_line) > MAX_SEARCH_LINE_LENGTH:
+                display_line = display_line[:MAX_SEARCH_LINE_LENGTH] + "..."
+
+            match_positions = [f"{m.start()}-{m.end()}" for m in matches]
+            results.append(f"Line {line_num} [matches: {', '.join(match_positions)}]: {display_line}")
+
+    if not results:
+        return f"No matches found for pattern '{pattern}'"
+
+    return f"Found {len(results)} match(es):\n" + "\n".join(results)
+
 
 
 count_rows_schema = {
@@ -219,8 +363,44 @@ list_directory_schema = {
     }
 }
 
+search_in_file_schema = {
+    "type": "function",
+    "function": {
+        "name": "search_in_file",
+        "description": "Search for pattern in file using different modes",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "path": {
+                    "type": "string",
+                    "description": "Relative path to file"
+                },
+                "pattern": {
+                    "type": "string",
+                    "description": "Search pattern"
+                },
+                "mode": {
+                    "type": "string",
+                    "enum": ["regex", "contains", "exact", "word"],
+                    "description": "Search mode: regex (regular expression), contains (substring), exact (full line match), word (whole word)"
+                },
+                "max_results": {
+                    "type": "integer",
+                    "description": "Maximum number of results (default: 50)"
+                },
+                "case_sensitive": {
+                    "type": "boolean",
+                    "description": "Case sensitive search (default: true)"
+                }
+            },
+            "required": ["path", "pattern", "mode"]
+        }
+    }
+}
+
 
 register_tool(read_file, read_file_schema)
 register_tool(write_file, write_file_schema)
 register_tool(count_rows, count_rows_schema)
 register_tool(list_directory, list_directory_schema)
+register_tool(search_in_file, search_in_file_schema)
