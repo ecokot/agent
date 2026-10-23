@@ -5,6 +5,8 @@ from pathlib import Path
 from tools.registry import register_tool
 from config import (
     BASE_DIR,
+    MAX_FILE_READ_SIZE_MB,
+    MAX_FILE_WRITE_SIZE_MB,
     MAX_LIST_DEPTH,
     MAX_LIST_FILES,
     MAX_SEARCH_RESULTS,
@@ -43,13 +45,17 @@ def read_file(path: str):
     if not validated_path.exists():
         return f"File not found: {path}"
 
+    file_size_mb = validated_path.stat().st_size / (1024 * 1024)
+    if file_size_mb > MAX_FILE_READ_SIZE_MB:
+        return f"File too large ({file_size_mb:.1f}MB, max {MAX_FILE_READ_SIZE_MB}MB)"
+
     with open(validated_path, "r", encoding="utf-8") as f:
         return f.read()
 
 
 def write_file(path: str, content: str, mode: str = "overwrite",
                pattern: str = None, replacement: str = None,
-               line_number: int = None, case_sensitive: bool = True):
+               insert_index: int = None, case_sensitive: bool = True):
     """
     Запись в файл с разными режимами.
 
@@ -59,13 +65,18 @@ def write_file(path: str, content: str, mode: str = "overwrite",
         mode: Режим записи (overwrite, append, prepend, replace, insert)
         pattern: Шаблон для поиска (для режима replace)
         replacement: Текст для замены (для режима replace, по умолчанию content)
-        line_number: Номер строки для вставки (для режима insert)
+        insert_index: Индекс строки для вставки (для режима insert, 0-based)
         case_sensitive: Чувствительность к регистру (для режима replace)
     """
     try:
         validated_path = _resolve_path(path)
     except ValueError as e:
         return str(e)
+
+    # Проверяем размер контента для записи
+    content_size_mb = len(content.encode("utf-8")) / (1024 * 1024)
+    if content_size_mb > MAX_FILE_WRITE_SIZE_MB:
+        return f"Content too large ({content_size_mb:.1f}MB, max {MAX_FILE_WRITE_SIZE_MB}MB)"
 
     validated_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -86,15 +97,15 @@ def write_file(path: str, content: str, mode: str = "overwrite",
             new_content = content + existing_content
 
         elif mode == "insert":
-            if line_number is None:
-                return "line_number required for insert mode"
+            if insert_index is None:
+                return "insert_index required for insert mode"
 
             lines = existing_content.splitlines(keepends=True)
 
-            if line_number < 0 or line_number > len(lines):
-                return f"Invalid line_number: {line_number}. File has {len(lines)} lines"
+            if insert_index < 0 or insert_index > len(lines):
+                return f"Invalid insert_index: {insert_index}. File has {len(lines)} lines"
 
-            lines.insert(line_number, content + "\n")
+            lines.insert(insert_index, content + "\n")
             new_content = "".join(lines)
 
         elif mode == "replace":
@@ -201,6 +212,7 @@ def list_directory(path: str = ".", recursive: bool = False,
     except Exception as e:
         return f"Error: {e}"
 
+
 def search_in_file(path: str, pattern: str, mode: str = "regex",
                    max_results: int = MAX_SEARCH_RESULTS,
                    case_sensitive: bool = True):
@@ -223,7 +235,7 @@ def search_in_file(path: str, pattern: str, mode: str = "regex",
         return f"File not found: {path}"
 
     if validated_path.stat().st_size > 10 * 1024 * 1024:
-        return f"File too large (max 10MB)"
+        return "File too large (max 10MB)"
 
     try:
         with open(validated_path, "r", encoding="utf-8", errors="replace") as f:
@@ -269,7 +281,6 @@ def search_in_file(path: str, pattern: str, mode: str = "regex",
         return f"No matches found for pattern '{pattern}'"
 
     return f"Found {len(results)} match(es):\n" + "\n".join(results)
-
 
 
 count_rows_schema = {
@@ -325,6 +336,27 @@ write_file_schema = {
                 "content": {
                     "type": "string",
                     "description": "Content to write"
+                },
+                "mode": {
+                    "type": "string",
+                    "enum": ["overwrite", "append", "prepend", "replace", "insert"],
+                    "description": "Write mode (default: overwrite)"
+                },
+                "pattern": {
+                    "type": "string",
+                    "description": "Regex pattern for replace mode"
+                },
+                "replacement": {
+                    "type": "string",
+                    "description": "Replacement text for replace mode (default: content)"
+                },
+                "insert_index": {
+                    "type": "integer",
+                    "description": "0-based line index for insert mode"
+                },
+                "case_sensitive": {
+                    "type": "boolean",
+                    "description": "Case sensitive for replace mode (default: true)"
                 }
             },
             "required": ["path", "content"]
