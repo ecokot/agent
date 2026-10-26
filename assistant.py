@@ -13,10 +13,14 @@ class Assistant:
         self.tools = tools or []
         self.functions = functions or {}
         self.dialog_logger = DialogLogger()
+        self.total_tokens = 0
+        self.prompt_tokens = 0
+        self.completion_tokens = 0
 
         self.messages = [
             {"role": "system", "content": instructions}
         ]
+
         self.dialog_logger.log_message(self.messages[0])
         logger.info(f"Assistant initialized with model: {model}")
 
@@ -39,6 +43,12 @@ class Assistant:
                 params["tool_choice"] = "auto"
                 logger.debug(f"Подключены инструменты: {self.tools}")
             res = self.client.chat.completions.create(**params)
+            usage = res.usage
+            if usage:
+                self.total_tokens += usage.total_tokens
+                self.prompt_tokens += usage.prompt_tokens
+                self.completion_tokens += usage.completion_tokens
+                logger.info(f"Token usage: prompt={usage.prompt_tokens}, completion={usage.completion_tokens}, total={usage.total_tokens} | Cumulative: prompt={self.prompt_tokens}, completion={self.completion_tokens}, total={self.total_tokens}")
             msg = res.choices[0].message
 
             if msg.tool_calls:
@@ -86,6 +96,19 @@ class Assistant:
                 continue
 
             reply = msg.content or ""
+            if not reply.strip():
+                self.messages.append({
+                    "role": "assistant",
+                    "content": reply
+                })
+                self.dialog_logger.log_message(self.messages[-1])
+                self.messages.append({
+                    "role": "Supervisor",
+                    "content": "Please provide a non-empty response."
+                })
+                self.dialog_logger.log_message(self.messages[-1])
+                step += 1
+                continue
             self.messages.append({
                 "role": "assistant",
                 "content": reply
@@ -93,4 +116,5 @@ class Assistant:
             self.dialog_logger.log_message(self.messages[-1])
             # for m in self.messages:
             #     print(m)
+            logger.info(f"Final token statistics: prompt_tokens={self.prompt_tokens}, completion_tokens={self.completion_tokens}, total_tokens={self.total_tokens}")
             return reply
