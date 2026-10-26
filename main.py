@@ -1,4 +1,8 @@
 # main.py
+import os
+from dotenv import load_dotenv
+load_dotenv()
+
 from logger import setup_logger
 setup_logger()
 
@@ -12,15 +16,20 @@ client = OpenAI(
     base_url="http://localhost:11434/v1",
     api_key="ollama"
 )
+client_api = OpenAI(
+    base_url="https://ollama.com/v1",
+    api_key=os.environ["OLLAMA_API_KEY"],
+)
 
 MODELS = [
     "qwen3.5:0.8b",
     "qwen3.5:4b",
     "qwen3.5:9b",
     "qwen3.8",
+    "gpt-oss:120b"
 ]
 
-model = "qwen3.5:4b"
+model = "gpt-oss:120b"
 
 instructions = """
 Ты — ИИ-агент.
@@ -40,12 +49,13 @@ tools, functions = get_tools([
 ])
 
 assistant = Assistant(
-    client=client,
+    client=client_api,
     model=model,
     instructions=instructions,
     tools=tools,
     functions=functions,
 )
-print(assistant("найди функцию write_file и напиши на какой она строке в файле cote.txt"))
+
+print(assistant("найди функцию write_file и напиши на какой она строке в файле code.txt"))
 
 
